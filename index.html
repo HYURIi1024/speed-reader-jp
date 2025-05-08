@@ -3,7 +3,6 @@
 <head>
   <meta charset="UTF-8">
   <title>速読支援アプリ</title>
-  <script src="https://cdn.jsdelivr.net/npm/kuromoji@0.1.2/dist/kuromoji.js"></script>
   <style>
     body { font-family: sans-serif; text-align: center; padding: 20px; }
     #display { font-size: 2em; margin: 30px; height: 2em; }
@@ -15,6 +14,8 @@
   <button onclick="start()">表示開始</button>
   <div id="display"></div>
 
+  <!-- ✅ スクリプトはここにまとめて置く -->
+  <script src="https://cdn.jsdelivr.net/npm/kuromoji@0.1.2/dist/kuromoji.min.js"></script>
   <script>
     let tokens = [];
     let index = 0;
