@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>速読支援アプリ</title>
+  <script src="https://unpkg.com/kuromoji@0.1.2/dist/kuromoji.js"></script>
+  <style>
+    body { font-family: sans-serif; text-align: center; padding: 20px; }
+    #display { font-size: 2em; margin: 30px; height: 2em; }
+  </style>
+</head>
+<body>
+  <h1>日本語速読支援アプリ</h1>
+  <textarea id="inputText" rows="5" cols="50" placeholder="日本語の文章をペーストしてください"></textarea><br>
+  <button onclick="start()">表示開始</button>
+  <div id="display"></div>
+
+  <script>
+    let tokens = [];
+    let index = 0;
+    let timer;
+
+    function start() {
+      const text = document.getElementById("inputText").value;
+      kuromoji.builder({ dicPath: "https://unpkg.com/kuromoji@0.1.2/dict/" }).build((err, tokenizer) => {
+        if (err) { console.error(err); return; }
+        const result = tokenizer.tokenize(text);
+        // 文節を作る：今回は品詞情報を使わず、表層形をそのまま使用
+        tokens = result.map(t => t.surface_form);
+        index = 0;
+        clearInterval(timer);
+        timer = setInterval(showNext, 400); // 400msごとに1文節表示
+      });
+    }
+
+    function showNext() {
+      if (index >= tokens.length) {
+        clearInterval(timer);
+        return;
+      }
+      document.getElementById("display").textContent = tokens[index++];
+    }
+  </script>
+</body>
+</html>
