@@ -1,14 +1,14 @@
 <!DOCTYPE html>
 <html lang="ja">
-    <head>
-        <meta charset="UTF-8">
-        <title>速読支援アプリ</title>
-        <script src="https://cdn.jsdelivr.net/npm/kuromoji@0.1.2/dist/kuromoji.js"></script>
-        <style>
-          body { font-family: sans-serif; text-align: center; padding: 20px; }
-          #display { font-size: 2em; margin: 30px; height: 2em; }
-        </style>
-      </head>
+<head>
+  <meta charset="UTF-8">
+  <title>速読支援アプリ</title>
+  <script src="https://cdn.jsdelivr.net/npm/kuromoji@0.1.2/dist/kuromoji.js"></script>
+  <style>
+    body { font-family: sans-serif; text-align: center; padding: 20px; }
+    #display { font-size: 2em; margin: 30px; height: 2em; }
+  </style>
+</head>
 <body>
   <h1>日本語速読支援アプリ</h1>
   <textarea id="inputText" rows="5" cols="50" placeholder="日本語の文章をペーストしてください"></textarea><br>
@@ -19,18 +19,32 @@
     let tokens = [];
     let index = 0;
     let timer;
+    let tokenizer = null;
+
+    // ページがロードされたら辞書を読み込む
+    window.onload = () => {
+      kuromoji.builder({ dicPath: "https://cdn.jsdelivr.net/npm/kuromoji@0.1.2/dict/" }).build((err, _tokenizer) => {
+        if (err) {
+          console.error("辞書の読み込みに失敗:", err);
+          return;
+        }
+        tokenizer = _tokenizer;
+        console.log("辞書の読み込み成功");
+      });
+    };
 
     function start() {
+      if (!tokenizer) {
+        alert("辞書がまだ読み込まれていません。少し待ってからもう一度試してください。");
+        return;
+      }
+
       const text = document.getElementById("inputText").value;
-      kuromoji.builder({ dicPath: "https://unpkg.com/kuromoji@0.1.2/dict/" }).build((err, tokenizer) => {
-        if (err) { console.error(err); return; }
-        const result = tokenizer.tokenize(text);
-        // 文節を作る：今回は品詞情報を使わず、表層形をそのまま使用
-        tokens = result.map(t => t.surface_form);
-        index = 0;
-        clearInterval(timer);
-        timer = setInterval(showNext, 400); // 400msごとに1文節表示
-      });
+      const result = tokenizer.tokenize(text);
+      tokens = result.map(t => t.surface_form);
+      index = 0;
+      clearInterval(timer);
+      timer = setInterval(showNext, 400);
     }
 
     function showNext() {
