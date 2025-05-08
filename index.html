@@ -194,8 +194,30 @@ if (pos === '助動詞' && specialAux.includes(surface)) {
     units.push(currentUnit);
   }
 
-  return units;
+  return mergeShortUnits(units);
+
 }
+//合体の後処理
+function mergeShortUnits(units) {
+  const merged = [];
+  let i = 0;
+
+  while (i < units.length) {
+    const current = units[i];
+    const next = units[i + 1];
+
+    if (current.length <= 4 && next && (current.length + next.length) < 12) {
+      merged.push(current + next);
+      i += 2;
+    } else {
+      merged.push(current);
+      i += 1;
+    }
+  }
+
+  return merged;
+}
+
   </script>
 </body>
 </html>
