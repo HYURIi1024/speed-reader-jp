@@ -2,36 +2,64 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
-  <title>速読支援アプリ</title>
+  <title>高速日本語表示</title>
   <script src="kuromoji.js"></script>
-  <style>
-    body {
-      font-family: sans-serif;
-      text-align: center;
-      padding: 20px;
-    }
+<style>
+  body {
+    font-family: sans-serif;
+    text-align: center;
+    padding: 20px;
+  }
 
-    #display {
-      font-size: 2em;
-      margin: 30px;
-      height: 2em;
-      color: #000;
-      font-weight: bold;
-    }
-  </style>
+  #display {
+    margin-top: 60px; 
+    height: 6em;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+  }
+
+  #prev, #next {
+    color: #aaa;
+    font-size: 1.2em;
+    opacity: 0.6;
+  }
+
+  #current {
+    color: #000;
+    font-size: 2em;
+    font-weight: bold;
+    margin: 0.3em 0;
+  }
+</style>
+
 </head>
 <body>
-  <h1>日本語速読支援アプリ</h1>
-  <textarea id="inputText" rows="5" cols="50" placeholder="日本語の文章をペーストしてください"></textarea><br>
+  <h1>日本語を文節に分解してパタパタ表示するよ</h1>
+  <textarea id="inputText" rows="5" cols="50" placeholder="ここにペースト"></textarea><br>
+  <label>表示速度（基準ミリ秒）:
+  <input type="number" id="baseSpeed" value="280" min="100" max="5000">
+</label><br>
   <button onclick="start()">表示開始</button>
+  <br>
+<button onclick="togglePause()">⏯️ 一時停止／再開</button>
+<button onclick="goPrev()">← 前へ</button>
+<button onclick="goNext()">次へ →</button>
 
-  <div id="display"></div>
+<div id="display">
+  <div id="prev" class="side-unit"></div>
+  <div id="current" class="main-unit"></div>
+  <div id="next" class="side-unit"></div>
+</div>
 
   <script>
     let tokenizer = null;
     let tokens = [];
     let index = 0;
     let timer = null;
+    let paused = false;
+let baseTime = 280; // グローバルにしておくと便利
 
     // kuromoji.js 初期化
     window.onload = () => {
@@ -46,200 +74,124 @@
     };
 
     function start() {
-      const text = document.getElementById("inputText").value;
-      if (!tokenizer) {
-        alert("辞書がまだ読み込まれていません。もう少し待ってください。");
-        return;
-      }
+  const text = document.getElementById("inputText").value;
+  const baseTime = parseInt(document.getElementById("baseSpeed").value, 10);
 
-      const tokensRaw = tokenizer.tokenize(text);
-      tokens = combineBunsetsu(tokensRaw);
-      index = 0;
-      clearInterval(timer);
-      updateDisplay();
-      timer = setInterval(updateDisplay, 500);
-    }
+  if (!tokenizer) {
+    alert("辞書がまだ読み込まれていません。");
+    return;
+  }
+
+  const tokensRaw = tokenizer.tokenize(text);
+  tokens = combineBunsetsu(tokensRaw);
+  index = 0;
+  showNext(baseTime);
+}
+
+function showNext(baseTime, manual = false) {
+  if (index >= tokens.length || (!manual && paused)) return;
+
+  const prev = index > 0 ? tokens[index - 1] : '';
+  const curr = tokens[index];
+  const next = index + 1 < tokens.length ? tokens[index + 1] : '';
+
+  document.getElementById("prev").textContent = prev;
+  document.getElementById("current").textContent = curr;
+  document.getElementById("next").textContent = next;
+
+  // 表示時間調整
+  const minFactor = 0.55;
+  const maxChars = 8;
+  const len = curr.length;
+  const ratio = Math.min(len / maxChars, 1);
+  const weight = minFactor + (1 - minFactor) * ratio;
+  const duration = baseTime * weight;
+
+  index++;
+  timer = setTimeout(() => showNext(baseTime), duration);  // manual = false（自動）
+
+}
+
 
     function updateDisplay() {
-      const curr = tokens[index] || '';
-      document.getElementById("display").textContent = curr;
-      index++;
-      if (index >= tokens.length) {
-        clearInterval(timer);
-      }
-    }
+  const prev = index > 0 ? tokens[index - 1] : '';
+  const curr = tokens[index] || '';
+  const next = index + 1 < tokens.length ? tokens[index + 1] : '';
 
-    function combineBunsetsu(tokensRaw) {
-  const units = [];
-  const specialAux = ['ます', 'です', 'た', 'だ', 'ぬ', 'ん'];
+  document.getElementById("prev").textContent = prev;
+  document.getElementById("current").textContent = curr;
+  document.getElementById("next").textContent = next;
+
+  index++;
+  if (index >= tokens.length) {
+    clearInterval(timer);
+  }
+}
+
+
+function togglePause() {
+  paused = !paused;
+  if (!paused) {
+    showNext(baseTime); // 再開時に続きを表示
+  } else {
+    clearTimeout(timer); // 一時停止
+  }
+}
+function goPrev() {
+  if (index > 1) {
+    index -= 2;
+    clearTimeout(timer);
+    showNext(baseTime, true); // manual = true
+  }
+}
+
+function goNext() {
+  if (index < tokens.length) {
+    clearTimeout(timer);
+    showNext(baseTime, true); // manual = true
+  }
+}
+
+function combineBunsetsu(tokensRaw) {
+  const breakPos = ['名詞', '動詞', '接頭詞', '副詞', '感動詞', '形容詞', '形容動詞', '連体詞','接続詞',];
+  const result = [];
   let currentUnit = '';
-  let i = 0;
+  let afterPrepos = false;
+  let afterSahenNoun = false;
 
-  while (i < tokensRaw.length) {
+  for (let i = 0; i < tokensRaw.length; i++) {
     const token = tokensRaw[i];
-    const next = tokensRaw[i + 1];
-    const next2 = tokensRaw[i + 2];
-    const next3 = tokensRaw[i + 3];
     const surface = token.surface_form;
+    const pos = token.pos;
+    const pos1 = token.pos_detail_1 || '';
+    const pos2 = token.pos_detail_2 || '';
+    const conjType = token.conjugated_type || '';
 
+    // noBreak の条件構築
+    let noBreak = !breakPos.includes(pos);
+    noBreak = noBreak || pos1.includes('接尾');
+    noBreak = noBreak || (pos === '動詞' && pos1.includes('サ変接続'));
+    noBreak = noBreak || pos1.includes('非自立');
+    noBreak = noBreak || afterPrepos;
+    noBreak = noBreak || (afterSahenNoun && pos === '動詞' && conjType === 'サ変・スル');
 
-        //マスの後ろに句読点
-        if (
-  token.pos === '助動詞' &&
-  specialAux.includes(token.surface_form) &&
-  token.conjugated_form === '基本形' &&
-  next &&
-  (next.surface_form === '。' || next.surface_form === '、')
-) {
-  currentUnit += token.surface_form + next.surface_form;
-  units.push(currentUnit);
-  currentUnit = '';
-  i += 2;
-  continue;
-}
-
-
-    // --- ユニット条件⑱：助動詞(体言接続)→名詞(非自立)→助動詞(特殊/基本形)→助詞(接続助詞)
-    if (
-      token.pos === '助動詞' &&
-      token.conjugated_form === '体言接続' &&
-      next && next.pos === '名詞' && next.pos_detail_1 === '非自立' &&
-      next2 && next2.pos === '助動詞' &&
-      specialAux.includes(next2.surface_form) &&
-      next2.conjugated_form === '基本形' &&
-      next3 && next3.pos === '助詞' && next3.pos_detail_1 === '接続助詞'
-    ) {
-      currentUnit += surface + next.surface_form + next2.surface_form + next3.surface_form;
-      units.push(currentUnit);
+    if (!noBreak && currentUnit !== '') {
+      result.push(currentUnit);
       currentUnit = '';
-      i += 4;
-      continue;
     }
 
-    // --- ユニット条件⑲：名詞（一般）→助詞（係助詞）
-    if (
-      token.pos === '名詞' &&
-      token.pos_detail_1 === '一般' &&
-      next && next.pos === '助詞' &&
-      next.pos_detail_1 === '係助詞'
-    ) {
-      currentUnit += surface + next.surface_form;
-      units.push(currentUnit);
-      currentUnit = '';
-      i += 2;
-      continue;
-    }
-
-    // --- ユニット条件⑳：終助詞＋句読点
-    if (
-      token.pos === '助詞' &&
-      token.pos_detail_1 === '終助詞' &&
-      next && (next.surface_form === '。' || next.surface_form === '、')
-    ) {
-      currentUnit += surface + next.surface_form;
-      units.push(currentUnit);
-      currentUnit = '';
-      i += 2;
-      continue;
-    }
-
-
-    // --- ユニット条件⑰：助動詞特殊型（体言接続以外）＋句読点
-    if (
-      token.pos === '助動詞' &&
-      specialAux.includes(surface) &&
-      token.conjugated_form !== '体言接続'
-    ) {
-      currentUnit += surface;
-      if (next && (next.surface_form === '。' || next.surface_form === '、')) {
-        currentUnit += next.surface_form;
-        i++;
-      }
-      units.push(currentUnit);
-      currentUnit = '';
-      i++;
-      continue;
-    }
-
-    // --- ユニット条件⑭：助詞＋句読点
-    if (
-      token.pos === '助詞' &&
-      next && (next.surface_form === '。' || next.surface_form === '、')
-    ) {
-      currentUnit += surface + next.surface_form;
-      units.push(currentUnit);
-      currentUnit = '';
-      i += 2;
-      continue;
-    }
-
-    // --- ユニット条件⑮：動詞＋助動詞
-    if (
-      token.pos === '動詞' &&
-      next && next.pos === '助動詞'
-    ) {
-      currentUnit += surface + next.surface_form;
-      units.push(currentUnit);
-      currentUnit = '';
-      i += 2;
-      continue;
-    }
-
-    // --- 通常処理：句読点が来たらそれも含めてユニットとして切る（優先度低）
-if (
-  next &&
-  (next.surface_form === '。' || next.surface_form === '、')
-) {
-  currentUnit += surface + next.surface_form;
-  units.push(currentUnit);
-  currentUnit = '';
-  i += 2;
-  continue;
-}
-
-
-    // --- ユニット条件⑬：同じ品詞が連続する場合、次が異なるまで連結
-    let currentPos = token.pos;
     currentUnit += surface;
-    while (
-      i + 1 < tokensRaw.length &&
-      tokensRaw[i + 1].pos === currentPos
-    ) {
-      i++;
-      currentUnit += tokensRaw[i].surface_form;
-    }
 
-    units.push(currentUnit);
-    currentUnit = '';
-    i++;
+    afterPrepos = (pos === '接頭詞');
+    afterSahenNoun = pos1.includes('サ変接続');
   }
 
   if (currentUnit) {
-    units.push(currentUnit);
+    result.push(currentUnit);
   }
 
-  return mergeShortUnits(units);
+  return result;
 }
-
-
-
-function mergeShortUnits(units) {
-  const merged = [];
-  let i = 0;
-  while (i < units.length) {
-    const current = units[i];
-    const next = units[i + 1];
-    if (current.length <= 4 && next && (current.length + next.length) < 12) {
-      merged.push(current + next);
-      i += 2;
-    } else {
-      merged.push(current);
-      i++;
-    }
-  }
-  return merged;
-}
-
 
   </script>
 </body>
