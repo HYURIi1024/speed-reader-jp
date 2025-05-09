@@ -77,116 +77,140 @@
 
   while (i < tokensRaw.length) {
     const token = tokensRaw[i];
-    const surface = token.surface_form;
-    const pos = token.pos;
     const next = tokensRaw[i + 1];
+    const next2 = tokensRaw[i + 2];
+    const next3 = tokensRaw[i + 3];
+    const surface = token.surface_form;
 
-// --- 助動詞語幹の次に副詞化が来る場合、その語までまとめてユニット化 ---
-if (
-  token.pos === '名詞' &&
-  token.pos_detail_1 === '非自立' &&
-  token.pos_detail_2 === '助動詞語幹' &&
-  next &&
-  next.pos_detail_1 === '副詞化'
-) {
-  currentUnit += surface + next.surface_form;
-  units.push(currentUnit);
-  currentUnit = '';
-  i += 2;
-  continue;
-}
-// --- 助動詞の次に終助詞が来る場合、その助動詞＋終助詞までをまとめてユニット化 ---
-if (
+
+        //マスの後ろに句読点
+        if (
   token.pos === '助動詞' &&
+  specialAux.includes(token.surface_form) &&
+  token.conjugated_form === '基本形' &&
   next &&
-  next.pos_detail_1 === '終助詞'
+  (next.surface_form === '。' || next.surface_form === '、')
 ) {
-  currentUnit += surface + next.surface_form;
+  currentUnit += token.surface_form + next.surface_form;
   units.push(currentUnit);
   currentUnit = '';
   i += 2;
   continue;
 }
-// --- 終助詞が現れたら、その語を含めてユニットを確定 ---
-if (token.pos_detail_1 === '終助詞') {
-  currentUnit += surface;
-  units.push(currentUnit);
-  currentUnit = '';
-  i++;
-  continue;
-}
 
-    // --- 名詞・非自立・助動詞語幹が現れたら、その語までを1ユニットとする ---
-if (
-  token.pos === '名詞' &&
-  token.pos_detail_1 === '非自立' &&
-  token.pos_detail_2 === '助動詞語幹'
-) {
-  currentUnit += surface;
-  units.push(currentUnit);
-  currentUnit = '';
-  i++;
-  continue;
-}
-    // --- 接続詞＋句読点 ---
-    if (pos === '接続詞') {
-      if (currentUnit) {
-        units.push(currentUnit);
-        currentUnit = '';
-      }
-      if (next && (next.surface_form === '。' || next.surface_form === '、')) {
-        units.push(surface + next.surface_form);
-        i += 2;
-        continue;
-      } else {
-        units.push(surface);
-        i++;
-        continue;
-      }
+
+    // --- ユニット条件⑱：助動詞(体言接続)→名詞(非自立)→助動詞(特殊/基本形)→助詞(接続助詞)
+    if (
+      token.pos === '助動詞' &&
+      token.conjugated_form === '体言接続' &&
+      next && next.pos === '名詞' && next.pos_detail_1 === '非自立' &&
+      next2 && next2.pos === '助動詞' &&
+      specialAux.includes(next2.surface_form) &&
+      next2.conjugated_form === '基本形' &&
+      next3 && next3.pos === '助詞' && next3.pos_detail_1 === '接続助詞'
+    ) {
+      currentUnit += surface + next.surface_form + next2.surface_form + next3.surface_form;
+      units.push(currentUnit);
+      currentUnit = '';
+      i += 4;
+      continue;
     }
 
-    // --- 助動詞特殊型が現れたら、それまでをユニットとして切る（句読点が後にあれば含める） ---
-if (pos === '助動詞' && specialAux.includes(surface)) {
-  currentUnit += surface;
+    // --- ユニット条件⑲：名詞（一般）→助詞（係助詞）
+    if (
+      token.pos === '名詞' &&
+      token.pos_detail_1 === '一般' &&
+      next && next.pos === '助詞' &&
+      next.pos_detail_1 === '係助詞'
+    ) {
+      currentUnit += surface + next.surface_form;
+      units.push(currentUnit);
+      currentUnit = '';
+      i += 2;
+      continue;
+    }
 
-  if (next && (next.surface_form === '。' || next.surface_form === '、')) {
-    currentUnit += next.surface_form;
-    i++; // 句読点もスキップ
-  }
+    // --- ユニット条件⑳：終助詞＋句読点
+    if (
+      token.pos === '助詞' &&
+      token.pos_detail_1 === '終助詞' &&
+      next && (next.surface_form === '。' || next.surface_form === '、')
+    ) {
+      currentUnit += surface + next.surface_form;
+      units.push(currentUnit);
+      currentUnit = '';
+      i += 2;
+      continue;
+    }
 
-  units.push(currentUnit);
-  currentUnit = '';
-  i++;
-  continue;
-}
-    // --- 助動詞特殊型が現れたら、それまでをユニットとして切る ---
-    if (pos === '助動詞' && specialAux.includes(surface)) {
+
+    // --- ユニット条件⑰：助動詞特殊型（体言接続以外）＋句読点
+    if (
+      token.pos === '助動詞' &&
+      specialAux.includes(surface) &&
+      token.conjugated_form !== '体言接続'
+    ) {
       currentUnit += surface;
+      if (next && (next.surface_form === '。' || next.surface_form === '、')) {
+        currentUnit += next.surface_form;
+        i++;
+      }
       units.push(currentUnit);
       currentUnit = '';
       i++;
       continue;
     }
 
-    // --- 同じ品詞が連続 ---
+    // --- ユニット条件⑭：助詞＋句読点
+    if (
+      token.pos === '助詞' &&
+      next && (next.surface_form === '。' || next.surface_form === '、')
+    ) {
+      currentUnit += surface + next.surface_form;
+      units.push(currentUnit);
+      currentUnit = '';
+      i += 2;
+      continue;
+    }
+
+    // --- ユニット条件⑮：動詞＋助動詞
+    if (
+      token.pos === '動詞' &&
+      next && next.pos === '助動詞'
+    ) {
+      currentUnit += surface + next.surface_form;
+      units.push(currentUnit);
+      currentUnit = '';
+      i += 2;
+      continue;
+    }
+
+    // --- 通常処理：句読点が来たらそれも含めてユニットとして切る（優先度低）
+if (
+  next &&
+  (next.surface_form === '。' || next.surface_form === '、')
+) {
+  currentUnit += surface + next.surface_form;
+  units.push(currentUnit);
+  currentUnit = '';
+  i += 2;
+  continue;
+}
+
+
+    // --- ユニット条件⑬：同じ品詞が連続する場合、次が異なるまで連結
+    let currentPos = token.pos;
     currentUnit += surface;
     while (
       i + 1 < tokensRaw.length &&
-      tokensRaw[i + 1].pos === pos &&
-      tokensRaw[i + 1].surface_form !== '。' &&
-      tokensRaw[i + 1].surface_form !== '、'
+      tokensRaw[i + 1].pos === currentPos
     ) {
       i++;
       currentUnit += tokensRaw[i].surface_form;
     }
 
-    // --- 句読点ならユニット確定 ---
-    if (surface === '。' || surface === '、') {
-      units.push(currentUnit);
-      currentUnit = '';
-    }
-    
-
+    units.push(currentUnit);
+    currentUnit = '';
     i++;
   }
 
@@ -195,28 +219,27 @@ if (pos === '助動詞' && specialAux.includes(surface)) {
   }
 
   return mergeShortUnits(units);
-
 }
-//合体の後処理
+
+
+
 function mergeShortUnits(units) {
   const merged = [];
   let i = 0;
-
   while (i < units.length) {
     const current = units[i];
     const next = units[i + 1];
-
     if (current.length <= 4 && next && (current.length + next.length) < 12) {
       merged.push(current + next);
       i += 2;
     } else {
       merged.push(current);
-      i += 1;
+      i++;
     }
   }
-
   return merged;
 }
+
 
   </script>
 </body>
